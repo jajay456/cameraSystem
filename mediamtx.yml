@@ -1,0 +1,5 @@
+# enables MediaMTX's HTTP API (localhost:9997) so the app can ask which
+# camera paths currently have a live publisher, for the live/offline badge.
+api: yes
+
+paths: {}

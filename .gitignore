@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+
+.env
+firebase-service-account.json
+
+buffer/*/*.mp4
+clips/*.mp4

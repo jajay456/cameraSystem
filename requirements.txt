@@ -1,0 +1,14 @@
+# --- Step 1: web server ---
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+pyyaml==6.0.2
+ruamel.yaml==0.18.6
+
+# --- Later steps (already listed so you install once) ---
+# Step 3 scanner:
+httpx==0.27.2
+# Step 5 uploader:
+cloudinary==1.41.0
+firebase-admin==6.5.0
+tenacity==9.0.0
+python-dotenv==1.0.1

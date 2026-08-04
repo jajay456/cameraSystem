@@ -1,0 +1,89 @@
+17:25:18 INFO    server: ========================================================
+17:25:18 INFO    server: KROSS Replay server starting
+17:25:18 INFO    server:   on this machine : http://localhost:8000
+17:25:18 INFO    server:   from your phone : http://192.168.1.163:8000/m   (same WiFi)
+17:25:18 INFO    server: ========================================================
+17:25:18 INFO    server: MediaMTX started (pid 15298)
+17:25:19 INFO    server: mac-camera ffmpeg started for mac (pid 15299, device 0)
+17:25:19 INFO    server: buffer recorder started for mac (pid 15300)
+17:25:20 WARNING server: buffer recorder for mac exited unexpectedly, restarting in 3s
+I0729 17:25:23.432766  592643 ev_poll_posix.cc:593] FD from fork parent still in poll list: fd(16, generation: 1)
+17:25:23 INFO    server: buffer recorder started for mac (pid 15302)
+17:25:24 WARNING server: buffer recorder for mac exited unexpectedly, restarting in 3s
+I0729 17:25:27.516227  592808 ev_poll_posix.cc:593] FD from fork parent still in poll list: fd(16, generation: 1)
+17:25:27 INFO    server: buffer recorder started for mac (pid 15305)
+17:25:28 WARNING server: buffer recorder for mac exited unexpectedly, restarting in 3s
+I0729 17:25:31.648754  593024 ev_poll_posix.cc:593] FD from fork parent still in poll list: fd(16, generation: 1)
+17:25:31 INFO    server: buffer recorder started for mac (pid 15315)
+17:26:17 INFO    server: ========================================================
+17:26:17 INFO    server: KROSS Replay server starting
+17:26:17 INFO    server:   on this machine : http://localhost:8000
+17:26:17 INFO    server:   from your phone : http://192.168.1.163:8000/m   (same WiFi)
+17:26:17 INFO    server: ========================================================
+17:26:17 INFO    server: MediaMTX started (pid 15351)
+17:26:18 INFO    server: mac-camera ffmpeg started for mac (pid 15354, device 0)
+17:26:18 INFO    server: buffer recorder started for mac (pid 15355)
+17:26:19 WARNING server: buffer recorder for mac exited unexpectedly, restarting in 3s
+17:26:22 INFO    server: buffer recorder started for mac (pid 15362)
+17:47:54 INFO    server: TRIGGER court=court_1  cam=mac  claim=2074
+17:48:06 INFO    server: claim 2074: clip processed (videoUrl=https://res.cloudinary.com/qwsidda4/video/upload/v1785322081/kross/onnut/2074.mp4)
+17:48:15 INFO    server: ========================================================
+17:48:15 INFO    server: KROSS Replay server starting
+17:48:15 INFO    server:   on this machine : http://localhost:8000
+17:48:15 INFO    server:   from your phone : http://192.168.1.163:8000/m   (same WiFi)
+17:48:15 INFO    server: ========================================================
+17:48:15 INFO    server: MediaMTX started (pid 16490)
+17:48:16 INFO    server: mac-camera ffmpeg started for mac (pid 16491, device 0)
+17:48:16 INFO    server: buffer recorder started for mac (pid 16492)
+17:48:17 WARNING server: buffer recorder for mac exited unexpectedly, restarting in 3s
+I0729 17:48:20.440403  625008 ev_poll_posix.cc:593] FD from fork parent still in poll list: fd(16, generation: 1)
+17:48:20 INFO    server: buffer recorder started for mac (pid 16493)
+18:23:03 INFO    server: TRIGGER court=court_1  cam=mac  claim=4183
+18:23:15 INFO    server: claim 4183: clip processed (videoUrl=https://res.cloudinary.com/qwsidda4/video/upload/v1785324189/kross/onnut/4183.mp4)
+18:27:16 INFO    server: TRIGGER court=court_1  cam=mac  claim=4436
+18:27:25 INFO    server: claim 4436: clip processed (videoUrl=https://res.cloudinary.com/qwsidda4/video/upload/v1785324440/kross/onnut/4436.mp4)
+18:35:04 INFO    server: ========================================================
+18:35:04 INFO    server: KROSS Replay server starting
+18:35:04 INFO    server:   on this machine : http://localhost:8000
+18:35:04 INFO    server:   from your phone : http://192.168.1.163:8000/m   (same WiFi)
+18:35:04 INFO    server: ========================================================
+18:35:05 INFO    server: MediaMTX started (pid 17647)
+18:35:06 INFO    server: mac-camera ffmpeg started for mac (pid 17649, device 0)
+18:35:06 INFO    server: buffer recorder started for mac (pid 17650)
+18:35:07 WARNING server: buffer recorder for mac exited unexpectedly, restarting in 3s
+18:35:10 INFO    server: buffer recorder started for mac (pid 17666)
+18:35:27 INFO    server: MediaMTX started (pid 17692)
+18:35:28 WARNING server: buffer recorder for mac exited unexpectedly, restarting in 3s
+18:35:28 WARNING server: mac-camera ffmpeg for mac exited unexpectedly, restarting in 2s
+18:35:28 INFO    server: camera added: no_club_test (rtsp) -> court test_court_nc
+I0729 18:35:28.307346  684494 ev_poll_posix.cc:593] FD from fork parent still in poll list: fd(16, generation: 1)
+18:35:28 INFO    server: buffer recorder started for no_club_test (pid 17693)
+18:35:29 WARNING server: buffer recorder for no_club_test exited unexpectedly, restarting in 3s
+I0729 18:35:30.369355  684572 ev_poll_posix.cc:593] FD from fork parent still in poll list: fd(16, generation: 1)
+18:35:30 INFO    server: mac-camera ffmpeg started for mac (pid 17697, device 0)
+I0729 18:35:31.266708  684702 ev_poll_posix.cc:593] FD from fork parent still in poll list: fd(16, generation: 1)
+18:35:31 INFO    server: buffer recorder started for mac (pid 17699)
+I0729 18:35:32.458704  684775 ev_poll_posix.cc:593] FD from fork parent still in poll list: fd(16, generation: 1)
+18:35:32 INFO    server: buffer recorder started for no_club_test (pid 17700)
+18:35:33 WARNING server: buffer recorder for no_club_test exited unexpectedly, restarting in 3s
+I0729 18:35:36.597482  684917 ev_poll_posix.cc:593] FD from fork parent still in poll list: fd(16, generation: 1)
+18:35:36 INFO    server: MediaMTX started (pid 17705)
+18:35:36 WARNING server: mac-camera ffmpeg for mac exited unexpectedly, restarting in 2s
+18:35:37 WARNING server: buffer recorder for mac exited unexpectedly, restarting in 3s
+18:35:37 INFO    server: camera removed: no_club_test
+I0729 18:35:38.773868  685077 ev_poll_posix.cc:593] FD from fork parent still in poll list: fd(16, generation: 1)
+18:35:38 INFO    server: mac-camera ffmpeg started for mac (pid 17709, device 0)
+I0729 18:35:40.642772  685301 ev_poll_posix.cc:593] FD from fork parent still in poll list: fd(16, generation: 1)
+18:35:40 INFO    server: buffer recorder started for mac (pid 17711)
+18:46:33 INFO    server: MediaMTX started (pid 18211)
+18:46:34 WARNING server: mac-camera ffmpeg for mac exited unexpectedly, restarting in 2s
+18:46:34 WARNING server: buffer recorder for mac exited unexpectedly, restarting in 3s
+18:46:34 INFO    server: camera added: cam (mac) -> court court_1
+18:46:34 INFO    server: mac-camera ffmpeg started for cam (pid 18214, device 0)
+18:46:34 INFO    server: buffer recorder started for cam (pid 18215)
+18:46:35 WARNING server: buffer recorder for cam exited unexpectedly, restarting in 3s
+18:46:36 INFO    server: mac-camera ffmpeg started for mac (pid 18218, device 0)
+18:46:37 INFO    server: buffer recorder started for mac (pid 18221)
+18:46:38 INFO    server: buffer recorder started for cam (pid 18222)
+18:47:03 INFO    server: TRIGGER court=court_1  cam=mac  claim=5623
+18:47:13 INFO    server: claim 5623: clip processed (videoUrl=https://res.cloudinary.com/qwsidda4/video/upload/v1785325629/kross/onnut/5623.mp4)
