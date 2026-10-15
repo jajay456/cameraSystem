@@ -50,8 +50,9 @@ python3.11 -m venv .venv
 cp .env.example .env
 ```
 Edit `.env` and fill in:
-- `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` —
-  from your Cloudinary dashboard (clip video hosting)
+- `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` /
+  `R2_BUCKET` / `R2_PUBLIC_URL` — Cloudflare R2 (clip video hosting). See
+  "Cloudflare R2 setup" below for where each value comes from.
 - `FIREBASE_SERVICE_ACCOUNT_PATH` — leave as `./firebase-service-account.json`
   and place that file (downloaded from Firebase Console → Project Settings →
   Service Accounts → Generate new private key) in the project root
@@ -151,7 +152,7 @@ python -m venv .venv
 ```powershell
 copy .env.example .env
 ```
-Fill in `.env` the same way as the macOS section above (Cloudinary keys,
+Fill in `.env` the same way as the macOS section above (R2 keys,
 Firebase service account path). Place `firebase-service-account.json` in
 the project root if it isn't there already.
 
@@ -169,7 +170,7 @@ If this is a **new branch/site**, also edit `config.yaml`:
 ```
 Open `http://localhost:8000` in a browser — you should see the camera grid.
 Use **+ Add Camera** to add this site's real cameras. Confirm capture →
-clip → Cloudinary → Firestore works before moving on. `Ctrl+C` to stop.
+clip → R2 → Firestore works before moving on. `Ctrl+C` to stop.
 
 ### 6. Make it auto-start (Windows Service via NSSM)
 Edit `NSSM_EXE` and `PROJECT_DIR` at the top of
@@ -230,8 +231,22 @@ for the build steps and what it does/doesn't bundle.
 - **Add cameras**: open the dashboard → **+ Add Camera** → pick an existing
   court or create a new one → RTSP URL (IP camera) or pick a Mac/Windows
   built-in camera device.
-- **Multi-branch**: see `MULTI_BRANCH.md` for how one Cloudinary + Firebase
-  account serves multiple independent sites.
+- **Multi-branch**: see `MULTI_BRANCH.md` for how one R2 bucket + Firebase
+  project serves multiple independent sites.
+- **Cloudflare R2 setup** (one-time, shared by every branch):
+  1. dash.cloudflare.com → R2 Object Storage → Create bucket `kross-clips`
+     (location: Asia-Pacific).
+  2. Bucket → Settings → Public Development URL → Enable (testing), or
+     Custom Domains → Add (production). That URL is `R2_PUBLIC_URL`.
+  3. Bucket → Settings → Object Lifecycle Rules → Add: delete objects
+     7 days after creation, all objects.
+  4. R2 Object Storage → API → Manage API tokens → Create Account API token:
+     Object Read & Write, only bucket `kross-clips`. Copy the Access Key ID /
+     Secret Access Key into `.env` (the secret is shown once). The account ID
+     is the subdomain of the bucket's S3 API URL.
+- **Clip size**: `system.output_height` (default 1080) and
+  `system.video_bitrate` (default 6M) in `config.yaml` control the recorded
+  quality — 1080p clips are ~10–30 MB vs ~120 MB at 4K.
 - **Troubleshooting**: check `logs/server.log` first. If the dashboard shows
   "server unreachable", confirm the server process (manual run, launchd
   service, or Windows service) is actually up and nothing else is using

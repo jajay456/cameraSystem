@@ -2,7 +2,7 @@
 
 ## Principle
 One self-contained server per site. Video never leaves a site's LAN. Every
-site uploads its clips to ONE shared Cloudinary + Firebase account, tagged
+site uploads its clips to ONE shared Cloudflare R2 bucket + Firebase project, tagged
 with a `branch` so they stay cleanly separated.
 
 ## Per site you need
@@ -16,8 +16,10 @@ with a `branch` so they stay cleanly separated.
 
 ## To add a branch
 1. Copy this whole project folder to the new site's mini-PC — including
-   `.env` and `firebase-service-account.json` as-is (same Cloudinary +
-   Firebase account is shared by every branch, on purpose).
+   `.env` and `firebase-service-account.json` as-is (same R2 bucket +
+   Firebase project is shared by every branch, on purpose). Optionally
+   create a separate R2 API token per branch so one lost machine can be
+   revoked without touching the others.
 2. On the new machine, before running it for the first time, clear out this
    branch's cameras so they don't come along: either delete each camera from
    the web UI (✕ on its tile) on the OLD machine before copying, or on the
@@ -30,12 +32,12 @@ with a `branch` so they stay cleanly separated.
 5. Open the web page → **+ Add Camera** → pick this site's **club** from the
    dropdown (onnut / sky / indoor / asoke) → add its real cameras with their
    real RTSP URLs. Picking the club there sets `branch.id` / `branch.name`
-   in `config.yaml` automatically — no manual YAML editing needed.
+   in `config.yaml` automatically — no makdgnual YAML editing needed.
 6. Follow `windows_deploy/README.md` steps 6–7 to make it auto-start as a
    Windows Service and (optionally) install the tray control icon.
 
 ## What stays shared
-- One Cloudinary account (clips go into per-branch folders, added in Step 5)
+- One R2 bucket `kross-clips` (clips go into per-branch folders, `kross/<branch id>/`)
 - One Firebase project (every clip document carries branch = "thl" / "r9" / …)
 - An optional central web page can later read Firestore and show/filter all
   branches at once.

@@ -2,4 +2,9 @@
 # camera paths currently have a live publisher, for the live/offline badge.
 api: yes
 
-paths: {}
+paths:
+  court_2:
+    source: publisher
+
+  court_1:
+    source: rtsp://admin:Krosspadel_01@192.168.1.151/stream1

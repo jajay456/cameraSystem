@@ -14,11 +14,24 @@ system:
   clip_seconds: 40          # highlight length
   cooldown_seconds: 50      # min gap between accepted triggers, per court
   encoder: "videotoolbox"   # mac. ubuntu -> "qsv"; fallback -> "libx264"
+  output_height: 1080       # clips are downscaled to this (0 = keep camera resolution)
+  video_bitrate: "8M"       # enough for 1080p50; ~20-40 MB per 40s clip
   stale_after_seconds: 15
   http_port: 8000
 
 # Four cameras. For now they point at the MediaMTX test stream so you can see
 # the app work before real hardware arrives. Add more streams in MediaMTX
 # (cam2, cam3, cam4) or just leave them pointing at cam1 to test the grid.
-cameras: []
-courts: {}
+cameras:
+  - id: court_1
+    court: court_1
+    name: Court 1
+    enabled: true
+    source_type: rtsp
+    source: rtsp://localhost:8554/court_1
+courts:
+  court_1:
+    display_name: Court 1
+    primary_cam: court_1
+    button_token: onnut-court_1-ac8761
+  

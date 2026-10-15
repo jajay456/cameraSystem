@@ -53,8 +53,9 @@ python3.11 -m venv .venv
 cp .env.example .env
 ```
 แก้ไฟล์ `.env` กรอก:
-- `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` —
-  ดูได้จาก Cloudinary dashboard (ไว้อัปโหลดวิดีโอคลิป)
+- `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` /
+  `R2_BUCKET` / `R2_PUBLIC_URL` — Cloudflare R2 (ไว้เก็บวิดีโอคลิป) ดูวิธีหา
+  แต่ละค่าในหัวข้อ "ตั้งค่า Cloudflare R2" ด้านล่าง
 - `FIREBASE_SERVICE_ACCOUNT_PATH` — ปล่อยเป็น `./firebase-service-account.json`
   แล้วเอาไฟล์นี้ (ดาวน์โหลดจาก Firebase Console → Project Settings →
   Service Accounts → Generate new private key) มาวางไว้ที่ root ของโปรเจกต์
@@ -150,7 +151,7 @@ python -m venv .venv
 ```powershell
 copy .env.example .env
 ```
-กรอก `.env` เหมือนหัวข้อ macOS ด้านบน (Cloudinary keys, พาธไฟล์ Firebase
+กรอก `.env` เหมือนหัวข้อ macOS ด้านบน (R2 keys, พาธไฟล์ Firebase
 service account) เอาไฟล์ `firebase-service-account.json` มาวางไว้ที่ root
 ของโปรเจกต์ถ้ายังไม่มี
 
@@ -168,7 +169,7 @@ service account) เอาไฟล์ `firebase-service-account.json` มาว
 ```
 เปิด `http://localhost:8000` ในเบราว์เซอร์ — ควรเห็นหน้ากริดกล้อง ใช้ปุ่ม
 **+ Add Camera** เพื่อเพิ่มกล้องจริงของสาขานี้ ลองกด capture → ตัดคลิป →
-อัปขึ้น Cloudinary → บันทึก Firestore ให้ผ่านก่อนไปขั้นถัดไป กด `Ctrl+C`
+อัปขึ้น R2 → บันทึก Firestore ให้ผ่านก่อนไปขั้นถัดไป กด `Ctrl+C`
 เพื่อหยุด
 
 ### 6. ตั้งให้รันอัตโนมัติ (Windows Service ผ่าน NSSM)
@@ -231,8 +232,22 @@ build และรายละเอียดว่า bundle อะไรบ้
 - **เพิ่มกล้อง**: เปิดหน้า dashboard → **+ Add Camera** → เลือกคอร์ทที่มีอยู่
   หรือสร้างใหม่ → ใส่ RTSP URL (กล้อง IP) หรือเลือกกล้องในตัวเครื่อง
   Mac/Windows
-- **หลายสาขา**: ดู `MULTI_BRANCH.md` สำหรับวิธีใช้ Cloudinary + Firebase
+- **หลายสาขา**: ดู `MULTI_BRANCH.md` สำหรับวิธีใช้ R2 bucket + Firebase
   บัญชีเดียวรองรับหลายสถานที่แยกกันอิสระ
+- **ตั้งค่า Cloudflare R2** (ทำครั้งเดียว ใช้ร่วมกันทุกสาขา):
+  1. dash.cloudflare.com → R2 Object Storage → Create bucket ชื่อ `kross-clips`
+     (location: Asia-Pacific)
+  2. เข้า bucket → Settings → Public Development URL → Enable (ช่วงทดสอบ)
+     หรือ Custom Domains → Add (ใช้งานจริง) ลิงก์ที่ได้คือ `R2_PUBLIC_URL`
+  3. Settings → Object Lifecycle Rules → Add: ลบไฟล์ (Delete objects)
+     หลังสร้าง 7 วัน ใช้กับทุกไฟล์
+  4. R2 Object Storage → API → Manage API tokens → Create Account API token:
+     สิทธิ์ Object Read & Write เฉพาะ bucket `kross-clips` แล้วคัดลอก
+     Access Key ID / Secret Access Key ใส่ `.env` (Secret แสดงครั้งเดียว)
+     ส่วน account ID คือตัวเลขหน้า `.r2.cloudflarestorage.com` ใน S3 API URL
+- **ขนาดคลิป**: `system.output_height` (ค่าเริ่มต้น 1080) และ
+  `system.video_bitrate` (ค่าเริ่มต้น 6M) ใน `config.yaml` กำหนดความละเอียด
+  ที่บันทึก — คลิป 1080p ประมาณ 10–30 MB เทียบกับ ~120 MB ที่ 4K
 - **แก้ปัญหาเบื้องต้น**: เช็ค `logs/server.log` ก่อนเป็นอันดับแรก ถ้าหน้า
   dashboard ขึ้น "server unreachable" ให้เช็คว่า process เซิร์ฟเวอร์
   (รันด้วยมือ, launchd service, หรือ Windows service) ทำงานอยู่จริง และ

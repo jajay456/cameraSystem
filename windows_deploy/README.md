@@ -38,7 +38,7 @@ python -m venv .venv
 .venv\Scripts\python -m app.main
 ```
 Open `http://localhost:8000`, use **+ Add Camera**, pick this site's club,
-add real cameras. Confirm capture → clip → Cloudinary → Firestore works
+add real cameras. Confirm capture → clip → R2 → Firestore works
 before moving on to auto-start. Ctrl+C to stop.
 
 ## 6. Install as an auto-starting Windows Service

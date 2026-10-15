@@ -49,8 +49,18 @@ def _clean_env() -> dict:
     those same vars leak into this subprocess and break the venv python's
     normal site-packages resolution (e.g. `import google.auth` failing
     even though it's installed). Strip them so the venv python starts as
-    if launched fresh from a shell."""
-    return {k: v for k, v in os.environ.items() if not k.startswith("PYTHON")}
+    if launched fresh from a shell.
+
+    Also: apps launched from Finder/LaunchServices (double-click, not a
+    Terminal) get a bare PATH that doesn't include Homebrew's bin dir —
+    app.main shells out to `mediamtx` and `ffmpeg` by bare name, so
+    without this they silently fail to start (no error surfaced, cameras
+    just show offline)."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith("PYTHON")}
+    homebrew_bins = ["/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin"]
+    path_parts = env.get("PATH", "").split(":")
+    env["PATH"] = ":".join(homebrew_bins + [p for p in path_parts if p not in homebrew_bins])
+    return env
 
 
 def _start_server() -> None:

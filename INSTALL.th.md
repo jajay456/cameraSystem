@@ -56,11 +56,14 @@
 
 **หน้าต่างที่ 1 — `.env`** ใส่ข้อมูลตามนี้:
 ```
-CLOUDINARY_CLOUD_NAME=...
-CLOUDINARY_API_KEY=...
-CLOUDINARY_API_SECRET=...
+R2_ACCOUNT_ID=...
+R2_ACCESS_KEY_ID=...
+R2_SECRET_ACCESS_KEY=...
+R2_BUCKET=kross-clips
+R2_PUBLIC_URL=https://...r2.dev
 ```
-(ขอข้อมูล Cloudinary จากทีมพัฒนา/แอดมินระบบ — ใช้บัญชีเดียวกันทุกสาขา)
+(ขอข้อมูล Cloudflare R2 จากทีมพัฒนา/แอดมินระบบ — ใช้ bucket เดียวกันทุกสาขา
+แต่แนะนำให้สร้าง API token แยกต่อสาขา ถ้าเครื่องไหนหายจะยกเลิกได้ทีละสาขา)
 
 **หน้าต่างที่ 2 — `config.yaml`** แก้ 2 บรรทัดบนสุดในหัวข้อ `branch:`
 ```yaml
@@ -110,7 +113,7 @@ service รันอยู่ไหม (`STATE` ควรเป็น `RUNNING`)
 
 **ปุ่ม capture กดแล้วไม่มีอะไรเกิดขึ้น**
 เช็คว่ากรอก `.env` ครบและรีสตาร์ท service แล้ว (ขั้นตอนที่ 3-4 ด้านบน) —
-ถ้ายังไม่ได้ทำ คลิปจะถูกตัดแต่ไม่ถูกอัปโหลดขึ้น Cloudinary
+ถ้ายังไม่ได้ทำ คลิปจะถูกตัดแต่ไม่ถูกอัปโหลดขึ้น R2
 
 ## วิธีถอนการติดตั้ง
 เปิด **Settings → Apps → Installed apps** ค้นหา "KROSS Replay" แล้วกด

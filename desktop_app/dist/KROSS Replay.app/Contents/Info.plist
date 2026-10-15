@@ -28,6 +28,8 @@
 	<false/>
 	<key>NSAppleScriptEnabled</key>
 	<false/>
+	<key>NSCameraUsageDescription</key>
+	<string>KROSS Replay needs camera access to record court highlight clips from this Mac's built-in camera.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright not specified</string>
 	<key>NSMainNibFile</key>

@@ -109,7 +109,7 @@ Filename: "nssm"; Parameters: "start {#MyServiceName}"; StatusMsg: "Starting Kro
 
 ; --- open the two files that still need real values, so setup isn't
 ;     "done" with the server silently missing credentials ---
-Filename: "notepad.exe"; Parameters: """{app}\.env"""; Description: "Open .env to fill in Cloudinary/Firebase credentials"; Flags: postinstall skipifsilent nowait
+Filename: "notepad.exe"; Parameters: """{app}\.env"""; Description: "Open .env to fill in R2/Firebase credentials"; Flags: postinstall skipifsilent nowait
 Filename: "notepad.exe"; Parameters: """{app}\config.yaml"""; Description: "Open config.yaml to set this branch's id/name"; Flags: postinstall skipifsilent nowait unchecked
 Filename: "{app}\KROSS Replay.exe"; Description: "Launch KROSS Replay now"; Flags: postinstall skipifsilent nowait unchecked
 

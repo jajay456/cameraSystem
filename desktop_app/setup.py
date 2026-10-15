@@ -19,6 +19,9 @@ OPTIONS = {
         "CFBundleDisplayName": "KROSS Replay",
         "CFBundleIdentifier": "com.kross.dashboard",
         "CFBundleShortVersionString": "1.0.0",
+        # required or macOS silently denies camera access (no prompt at
+        # all) to the ffmpeg process this app spawns for Mac-camera courts
+        "NSCameraUsageDescription": "KROSS Replay needs camera access to record court highlight clips from this Mac's built-in camera.",
     },
     "packages": ["webview"],
     # pywebview supports many platforms/backends (Qt, GTK, Win32, CEF...);

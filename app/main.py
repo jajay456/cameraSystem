@@ -11,12 +11,13 @@ This is the single program you run. It:
      process to feed it (publishing a Mac's built-in camera, or continuously
      recording every enabled camera into a rolling buffer for clip-cutting)
   6. on a button trigger: cuts the last clip_seconds from that camera's
-     buffer, uploads it to Cloudinary, and writes a Firestore doc with the
-     result (see .env.example for the credentials this needs)
+     buffer, uploads it to Cloudflare R2 (or Cloudinary as a fallback), and
+     writes a Firestore doc with the result (see .env.example for the
+     credentials this needs)
 
 Run:
     pip install -r requirements.txt
-    cp .env.example .env   # fill in Cloudinary + Firebase credentials
+    cp .env.example .env   # fill in R2 + Firebase credentials
     python -m app.main
 Then open http://localhost:8000  (or the machine's LAN IP from your phone).
 """
@@ -35,6 +36,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import boto3
 import cloudinary
 import cloudinary.uploader
 import firebase_admin
@@ -82,10 +84,25 @@ def save_yaml(path: Path, data) -> None:
 
 CFG = load_yaml(CONFIG_PATH)
 
-# ----------------------------------------------------------------- Cloudinary / Firestore
-# Both are optional at startup: if not configured (.env missing), clips are
+# ----------------------------------------------------------------- R2 / Cloudinary / Firestore
+# All optional at startup: if not configured (.env missing), clips are
 # still cut to clips/ but the upload/metadata-write step is skipped with a
-# warning, instead of crashing the whole server.
+# warning, instead of crashing the whole server. R2 is used for uploads when
+# configured; Cloudinary stays as a fallback and so cleanup can still delete
+# clips uploaded there before the switch.
+R2_CONFIGURED = bool(os.environ.get("R2_ACCESS_KEY_ID"))
+R2_BUCKET = os.environ.get("R2_BUCKET", "kross-clips")
+R2_PUBLIC_URL = os.environ.get("R2_PUBLIC_URL", "").rstrip("/")
+_r2 = None
+if R2_CONFIGURED:
+    _r2 = boto3.client(
+        "s3",
+        endpoint_url=f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com",
+        aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
+        aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
+        region_name="auto",
+    )
+
 CLOUDINARY_CONFIGURED = bool(os.environ.get("CLOUDINARY_CLOUD_NAME"))
 if CLOUDINARY_CONFIGURED:
     cloudinary.config(
@@ -94,8 +111,8 @@ if CLOUDINARY_CONFIGURED:
         api_secret=os.environ["CLOUDINARY_API_SECRET"],
         secure=True,
     )
-else:
-    log.warning("Cloudinary not configured (.env missing) — clips will be cut but not uploaded")
+if not R2_CONFIGURED and not CLOUDINARY_CONFIGURED:
+    log.warning("R2/Cloudinary not configured (.env missing) — clips will be cut but not uploaded")
 
 FIRESTORE_COLLECTION = os.environ.get("FIRESTORE_COLLECTION", "kross_highlight")
 _firestore_db = None
@@ -220,7 +237,9 @@ def stop_mac_camera(cam_id: str) -> None:
 # Every enabled camera gets a continuous ffmpeg process writing rolling
 # segment_seconds-long .mp4 files into buffer/<cam_id>/, wrapping after
 # segment_wrap files (segment_wrap x segment_seconds = the buffer window).
-# A trigger later concatenates the newest ones into a clip.
+# A trigger later concatenates the newest ones into a clip. Footage is
+# downscaled to output_height and capped at video_bitrate here, so clips are
+# already small when cut (4K at the camera's bitrate is ~120 MB per 40s clip).
 ENCODER_MAP = {"videotoolbox": "h264_videotoolbox", "qsv": "h264_qsv", "libx264": "libx264"}
 _buffer_stop_events: dict[str, threading.Event] = {}
 
@@ -237,10 +256,18 @@ def _buffer_supervisor(cam_id: str, stop_event: threading.Event) -> None:
     encoder = ENCODER_MAP.get(CFG["system"].get("encoder"), "libx264")
     seg_seconds = CFG["system"]["segment_seconds"]
     seg_wrap = CFG["system"]["segment_wrap"]
+    height = int(CFG["system"].get("output_height", 1080))
+    bitrate = str(CFG["system"].get("video_bitrate", "6M"))
+    vf = ["-vf", f"scale=-2:'min({height},ih)'"] if height else []
+    # segments left from a previous run may be stale or a different resolution;
+    # mixing them into a -c copy concat would produce a broken clip
+    for old in seg_dir.glob("seg*.mp4"):
+        old.unlink(missing_ok=True)
     cmd = [
         "ffmpeg", "-nostdin", "-loglevel", "warning", "-rtsp_transport", "tcp",
         "-i", src,
-        "-an", "-c:v", encoder, "-pix_fmt", "yuv420p",
+        "-an", *vf, "-c:v", encoder, "-pix_fmt", "yuv420p",
+        "-b:v", bitrate, "-maxrate", bitrate, "-bufsize", bitrate,
         "-force_key_frames", f"expr:gte(t,n_forced*{seg_seconds})",
         "-f", "segment", "-segment_time", str(seg_seconds),
         "-segment_wrap", str(seg_wrap), "-reset_timestamps", "1",
@@ -309,6 +336,13 @@ def cut_clip(cam_id: str, claim: str) -> Path | None:
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(2), reraise=True)
+def _upload_to_r2(clip_path: Path, claim: str, club_id: str) -> tuple:
+    key = f"kross/{club_id}/{claim}.mp4"
+    _r2.upload_file(str(clip_path), R2_BUCKET, key, ExtraArgs={"ContentType": "video/mp4"})
+    return f"{R2_PUBLIC_URL}/{key}", key
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2), reraise=True)
 def _upload_to_cloudinary(clip_path: Path, claim: str, club_id: str) -> tuple:
     result = cloudinary.uploader.upload_large(
         str(clip_path), resource_type="video",
@@ -330,12 +364,16 @@ def process_clip(cam_id: str, court_id: str, claim: str) -> None:
         club_id = CFG.get("branch", {}).get("id", "site")
         video_url = None
         public_id = None
-        if CLOUDINARY_CONFIGURED:
+        r2_key = None
+        if R2_CONFIGURED:
+            video_url, r2_key = _upload_to_r2(clip_path, claim, club_id)
+        elif CLOUDINARY_CONFIGURED:
             video_url, public_id = _upload_to_cloudinary(clip_path, claim, club_id)
+        else:
+            log.warning("claim %s: no upload target configured, skipping upload", claim)
+        if video_url:
             # uploaded — the mini-PC doesn't need to keep a local copy anymore
             clip_path.unlink(missing_ok=True)
-        else:
-            log.warning("claim %s: Cloudinary not configured, skipping upload", claim)
 
         if _firestore_db is not None:
             now = datetime.now()
@@ -352,6 +390,8 @@ def process_clip(cam_id: str, court_id: str, claim: str) -> None:
             }
             if public_id:
                 doc["cloudinaryPublicId"] = public_id
+            if r2_key:
+                doc["r2Key"] = r2_key
             _firestore_db.collection(FIRESTORE_COLLECTION).add(doc)
         else:
             log.warning("claim %s: Firestore not configured, skipping metadata write", claim)
@@ -362,8 +402,8 @@ def process_clip(cam_id: str, court_id: str, claim: str) -> None:
 
 
 # ----------------------------------------------------------------- retention cleanup
-# Highlight clips older than CLIP_RETENTION_DAYS get their Cloudinary asset
-# and Firestore doc deleted, so old footage doesn't sit around forever.
+# Highlight clips older than CLIP_RETENTION_DAYS get their R2 object (or
+# Cloudinary asset) and Firestore doc deleted, so old footage doesn't sit around forever.
 CLIP_RETENTION_DAYS = int(os.environ.get("CLIP_RETENTION_DAYS", "7"))
 
 
@@ -383,6 +423,12 @@ def _cleanup_old_clips_once() -> None:
                 cloudinary.uploader.destroy(public_id, resource_type="video")
             except Exception:
                 log.exception("cleanup: failed to delete Cloudinary asset %s", public_id)
+        r2_key = data.get("r2Key")
+        if r2_key and R2_CONFIGURED:
+            try:
+                _r2.delete_object(Bucket=R2_BUCKET, Key=r2_key)
+            except Exception:
+                log.exception("cleanup: failed to delete R2 object %s", r2_key)
         doc.reference.delete()
         removed += 1
         log.info("cleanup: removed expired clip claim=%s (older than %d days)",
@@ -678,6 +724,17 @@ def api_trigger(req: TriggerReq):
     if req.token is not None and req.token != court.get("button_token"):
         raise HTTPException(403, "invalid button token")
 
+    # refuse up front if the camera hasn't buffered a full clip yet (just
+    # started / restarted) — otherwise the button says "captured" but the
+    # background cut finds nothing and the claim code leads nowhere
+    cam_id = court.get("primary_cam")
+    if cam_id:
+        seg_seconds = CFG["system"]["segment_seconds"]
+        needed = -(-CFG["system"]["clip_seconds"] // seg_seconds) + 1  # +1: newest is still being written
+        have = len(list((Path(CFG["system"]["buffer_dir"]) / cam_id).glob("seg*.mp4")))
+        if have < needed:
+            raise HTTPException(409, f"camera warming up: wait {(needed - have) * seg_seconds}s")
+
     now = time.time()
     cooldown = CFG["system"]["cooldown_seconds"]
     since = now - _last_trigger.get(req.court, 0)
@@ -687,7 +744,6 @@ def api_trigger(req: TriggerReq):
 
     _last_trigger[req.court] = now
     claim = f"{int(now) % 10000:04d}"
-    cam_id = court.get("primary_cam")
     log.info("TRIGGER court=%s  cam=%s  claim=%s", req.court, cam_id, claim)
 
     if cam_id:
