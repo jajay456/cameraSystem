@@ -29,6 +29,7 @@ import re
 import secrets
 import socket
 import subprocess
+import sys
 import threading
 import time
 import urllib.request
@@ -259,15 +260,27 @@ def _buffer_supervisor(cam_id: str, stop_event: threading.Event) -> None:
     height = int(CFG["system"].get("output_height", 1080))
     bitrate = str(CFG["system"].get("video_bitrate", "6M"))
     vf = ["-vf", f"scale=-2:'min({height},ih)'"] if height else []
+    # h264_qsv turns forced keyframes into plain I-frames, which the segment
+    # muxer can't split on — segments come out ~10s instead of seg_seconds
+    # (so clips double in length) unless they're forced to be IDR frames.
+    enc_opts = ["-forced_idr", "1"] if encoder == "h264_qsv" else []
+    # decode on the iGPU too — software-decoding a 4K camera stream alone
+    # pins a laptop CPU. d3d11va (not -hwaccel qsv) because it hands frames
+    # back in system memory, which the software scale filter above needs.
+    dec_opts = (["-hwaccel", "d3d11va"]
+                if encoder == "h264_qsv" and sys.platform == "win32" else [])
     # segments left from a previous run may be stale or a different resolution;
     # mixing them into a -c copy concat would produce a broken clip
     for old in seg_dir.glob("seg*.mp4"):
         old.unlink(missing_ok=True)
     cmd = [
         "ffmpeg", "-nostdin", "-loglevel", "warning", "-rtsp_transport", "tcp",
-        "-i", src,
-        "-an", *vf, "-c:v", encoder, "-pix_fmt", "yuv420p",
+        *dec_opts, "-i", src,
+        *vf, "-c:v", encoder, *enc_opts, "-pix_fmt", "yuv420p",
         "-b:v", bitrate, "-maxrate", bitrate, "-bufsize", bitrate,
+        # camera audio (often G.711 PCM, which MP4 can't hold) -> AAC; a
+        # source without audio just yields video-only segments
+        "-c:a", "aac", "-b:a", "64k",
         "-force_key_frames", f"expr:gte(t,n_forced*{seg_seconds})",
         "-f", "segment", "-segment_time", str(seg_seconds),
         "-segment_wrap", str(seg_wrap), "-reset_timestamps", "1",

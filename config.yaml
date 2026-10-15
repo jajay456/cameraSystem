@@ -13,7 +13,7 @@ system:
   segment_wrap: 24          # 24 x 5s = 120s rolling window per camera
   clip_seconds: 40          # highlight length
   cooldown_seconds: 50      # min gap between accepted triggers, per court
-  encoder: "videotoolbox"   # mac. ubuntu -> "qsv"; fallback -> "libx264"
+  encoder: "qsv"            # windows Intel iGPU. mac -> "videotoolbox"; ubuntu -> "qsv"; fallback -> "libx264"
   output_height: 1080       # clips are downscaled to this (0 = keep camera resolution)
   video_bitrate: "8M"       # enough for 1080p50; ~20-40 MB per 40s clip
   stale_after_seconds: 15
