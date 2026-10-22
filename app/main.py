@@ -242,6 +242,29 @@ def stop_mac_camera(cam_id: str) -> None:
 # downscaled to output_height and capped at video_bitrate here, so clips are
 # already small when cut (4K at the camera's bitrate is ~120 MB per 40s clip).
 ENCODER_MAP = {"videotoolbox": "h264_videotoolbox", "qsv": "h264_qsv", "libx264": "libx264"}
+
+
+def _pick_encoder() -> str:
+    """The configured encoder if this machine's ffmpeg has it, else the
+    platform's hardware encoder, else libx264. config.yaml is shared between
+    the Windows sites (qsv) and Macs (videotoolbox); an encoder ffmpeg lacks
+    makes the recorder exit instantly in a loop, leaving the buffer empty and
+    every trigger stuck on "camera warming up"."""
+    wanted = ENCODER_MAP.get(CFG["system"].get("encoder"), "libx264")
+    try:
+        available = subprocess.run(["ffmpeg", "-hide_banner", "-encoders"],
+                                   capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return wanted
+    fallback = "h264_videotoolbox" if sys.platform == "darwin" else "libx264"
+    for enc in (wanted, fallback, "libx264"):
+        if f" {enc} " in available:
+            if enc != wanted:
+                log.warning("encoder %s not available in ffmpeg, using %s", wanted, enc)
+            return enc
+    return wanted
+
+
 _buffer_stop_events: dict[str, threading.Event] = {}
 
 
@@ -254,7 +277,7 @@ def _buffer_dir_for(cam_id: str) -> Path:
 def _buffer_supervisor(cam_id: str, stop_event: threading.Event) -> None:
     src = f"rtsp://localhost:{MEDIAMTX_RTSP_PORT}/{cam_id}"
     seg_dir = _buffer_dir_for(cam_id)
-    encoder = ENCODER_MAP.get(CFG["system"].get("encoder"), "libx264")
+    encoder = _pick_encoder()
     seg_seconds = CFG["system"]["segment_seconds"]
     seg_wrap = CFG["system"]["segment_wrap"]
     height = int(CFG["system"].get("output_height", 1080))
@@ -320,12 +343,32 @@ def cut_clip(cam_id: str, claim: str) -> Path | None:
     Returns None if there isn't enough buffered footage yet (camera just
     started) or the segment directory doesn't exist."""
     seg_dir = Path(CFG["system"]["buffer_dir"]) / cam_id
-    segs = sorted(seg_dir.glob("seg*.mp4"), key=lambda p: p.stat().st_mtime)
+    seg_seconds = CFG["system"]["segment_seconds"]
+
+    def oldest_first() -> list[Path]:
+        return sorted(seg_dir.glob("seg*.mp4"), key=lambda p: p.stat().st_mtime)
+
+    # the segment being written right now holds the moment the button was
+    # pressed; cutting only the finished ones would end the clip up to
+    # seg_seconds before the press. Wait for the recorder to roll over to the
+    # next file (segment_wrap reuses names, so watch which file is newest).
+    segs = oldest_first()
+    if not segs:
+        return None
+    pressed = segs[-1]
+    deadline = time.time() + seg_seconds + 5
+    while time.time() < deadline:
+        time.sleep(0.25)
+        segs = oldest_first()
+        if segs and segs[-1] != pressed:
+            break
+    else:
+        log.warning("claim %s: segment didn't roll over in time, clip may end before the press", claim)
+
     if len(segs) < 2:
         return None
     segs = segs[:-1]  # the newest file is still being written — exclude it
 
-    seg_seconds = CFG["system"]["segment_seconds"]
     needed = -(-CFG["system"]["clip_seconds"] // seg_seconds)  # ceil
     if len(segs) < needed:
         return None  # camera hasn't buffered a full clip_seconds yet
