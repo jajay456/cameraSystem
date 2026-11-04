@@ -1,0 +1,9 @@
+$kind: http-request
+url: "{{base_url}}/api/trigger"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: '{"court":"court_1"}'
+order: 9000

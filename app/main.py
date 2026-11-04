@@ -42,7 +42,7 @@ import cloudinary
 import cloudinary.uploader
 import firebase_admin
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from firebase_admin import credentials, firestore
@@ -121,15 +121,17 @@ if not R2_CONFIGURED and not CLOUDINARY_CONFIGURED:
 FIRESTORE_COLLECTION = os.environ.get("FIRESTORE_COLLECTION", "kross_highlight")
 _firestore_db = None
 _service_account_path = os.environ.get("FIREBASE_SERVICE_ACCOUNT_PATH")
-if _service_account_path and Path(_service_account_path).exists():
-    firebase_admin.initialize_app(credentials.Certificate(_service_account_path))
-    _firestore_db = firestore.client()
-elif os.environ.get("FIRESTORE_EMULATOR_HOST"):
+# The emulator wins when configured, so a local stack never writes to
+# production and its data lives under the project the emulator exports.
+if os.environ.get("FIRESTORE_EMULATOR_HOST"):
     _firestore_db = google_firestore.Client(
         project=os.environ.get("GCLOUD_PROJECT", "kross-highlight-local"),
         credentials=AnonymousCredentials(),
     )
     log.info("Firestore emulator configured at %s", os.environ["FIRESTORE_EMULATOR_HOST"])
+elif _service_account_path and Path(_service_account_path).exists():
+    firebase_admin.initialize_app(credentials.Certificate(_service_account_path))
+    _firestore_db = firestore.client()
 else:
     log.warning("Firebase not configured (FIREBASE_SERVICE_ACCOUNT_PATH missing) — clip metadata will not be saved")
 
@@ -417,6 +419,29 @@ def _upload_to_r2(clip_path: Path, claim: str, club_id: str) -> tuple:
     return f"{R2_PUBLIC_URL}/{key}", key
 
 
+def make_thumbnail(clip_path: Path) -> Path | None:
+    """One 640px-wide JPEG from the middle of the clip, for partner listings."""
+    thumb_path = clip_path.with_suffix(".jpg")
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-nostdin", "-loglevel", "warning",
+             "-ss", str(CFG["system"]["clip_seconds"] / 2), "-i", str(clip_path),
+             "-frames:v", "1", "-update", "1", "-vf", "scale=640:-2", "-q:v", "4", str(thumb_path)],
+            check=True, timeout=30,
+        )
+    except Exception:
+        log.exception("thumbnail failed for %s", clip_path.name)
+        return None
+    return thumb_path if thumb_path.exists() else None
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2), reraise=True)
+def _upload_thumb_to_r2(thumb_path: Path, claim: str, club_id: str) -> tuple:
+    key = f"kross/{club_id}/{claim}.jpg"
+    _r2.upload_file(str(thumb_path), R2_BUCKET, key, ExtraArgs={"ContentType": "image/jpeg"})
+    return f"{R2_PUBLIC_URL}/{key}", key
+
+
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(2), reraise=True)
 def _upload_to_cloudinary(clip_path: Path, claim: str, club_id: str) -> tuple:
     result = cloudinary.uploader.upload_large(
@@ -440,8 +465,17 @@ def process_clip(cam_id: str, court_id: str, claim: str) -> None:
         video_url = None
         public_id = None
         r2_key = None
+        thumb_url = None
+        r2_thumb_key = None
         if R2_CONFIGURED:
             video_url, r2_key = _upload_to_r2(clip_path, claim, club_id)
+            thumb_path = make_thumbnail(clip_path)
+            if thumb_path:
+                try:
+                    thumb_url, r2_thumb_key = _upload_thumb_to_r2(thumb_path, claim, club_id)
+                except Exception:
+                    log.exception("claim %s: thumbnail upload failed", claim)
+                thumb_path.unlink(missing_ok=True)
         elif CLOUDINARY_CONFIGURED:
             video_url, public_id = _upload_to_cloudinary(clip_path, claim, club_id)
         else:
@@ -467,6 +501,9 @@ def process_clip(cam_id: str, court_id: str, claim: str) -> None:
                 doc["cloudinaryPublicId"] = public_id
             if r2_key:
                 doc["r2Key"] = r2_key
+            if thumb_url:
+                doc["thumbnailUrl"] = thumb_url
+                doc["r2ThumbKey"] = r2_thumb_key
             _firestore_db.collection(FIRESTORE_COLLECTION).add(doc)
         else:
             log.warning("claim %s: Firestore not configured, skipping metadata write", claim)
@@ -498,12 +535,12 @@ def _cleanup_old_clips_once() -> None:
                 cloudinary.uploader.destroy(public_id, resource_type="video")
             except Exception:
                 log.exception("cleanup: failed to delete Cloudinary asset %s", public_id)
-        r2_key = data.get("r2Key")
-        if r2_key and R2_CONFIGURED:
-            try:
-                _r2.delete_object(Bucket=R2_BUCKET, Key=r2_key)
-            except Exception:
-                log.exception("cleanup: failed to delete R2 object %s", r2_key)
+        for r2_key in (data.get("r2Key"), data.get("r2ThumbKey")):
+            if r2_key and R2_CONFIGURED:
+                try:
+                    _r2.delete_object(Bucket=R2_BUCKET, Key=r2_key)
+                except Exception:
+                    log.exception("cleanup: failed to delete R2 object %s", r2_key)
         doc.reference.delete()
         removed += 1
         log.info("cleanup: removed expired clip claim=%s (older than %d days)",
@@ -764,6 +801,124 @@ def api_highlights(limit: int = 10):
         if len(highlights) >= limit:
             break
     return {"highlights": highlights}
+
+
+def _parse_iso(value: str, name: str) -> datetime:
+    # an unencoded "+07:00" arrives as " 07:00" (form decoding turns + into a space)
+    value = value.strip().replace(" ", "+")
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(400, f"{name} must be ISO 8601, e.g. 2026-11-03T18:00:00+07:00")
+    if dt.tzinfo is None:
+        raise HTTPException(400, f"{name} must include a timezone offset, e.g. +07:00")
+    return dt
+
+
+PARTNER_TZ = timezone(timedelta(hours=7))
+SIGNED_URL_SECONDS = 48 * 3600  # partners need >= 24h; they re-fetch after expiry
+
+
+def _signed(r2_key: str | None, fallback: str | None) -> str | None:
+    """Time-limited R2 link so partners need the API key to get a playable URL."""
+    if r2_key and _r2 is not None:
+        return _r2.generate_presigned_url(
+            "get_object", Params={"Bucket": R2_BUCKET, "Key": r2_key},
+            ExpiresIn=SIGNED_URL_SECONDS,
+        )
+    return fallback
+
+
+def _partner_clip(doc_id: str, d: dict, tz) -> dict:
+    ended = d["createdAt"].astimezone(tz)
+    duration = d.get("durationSeconds") or 0
+    updated = d.get("updatedAt") or d["createdAt"]
+    return {
+        "id": doc_id,
+        "club": d.get("club"),
+        "court": (d.get("court") or "").removeprefix("court_"),
+        "start_at": (ended - timedelta(seconds=duration)).isoformat(timespec="seconds"),
+        "end_at": ended.isoformat(timespec="seconds"),
+        "duration_seconds": duration,
+        "video_url": _signed(d.get("r2Key"), d.get("videoUrl")),
+        "thumbnail_url": _signed(d.get("r2ThumbKey"), d.get("thumbnailUrl")),
+        "updated_at": updated.astimezone(tz).isoformat(timespec="seconds"),
+    }
+
+
+@app.get("/v1/clips")
+def v1_clips(club: str | None = None, court: str | None = None,
+             from_: str | None = Query(None, alias="from"), to: str | None = None,
+             updated_since: str | None = None, limit: int = 100, cursor: str | None = None):
+    """Partner API (Book and Go): clips whose recording overlaps [from, to),
+    or everything updated after `updated_since`. `court` takes "3" or
+    "court_3". Times come back in the offset of `from` (else +07:00).
+    Pass `next_cursor` back as `cursor` to get the next page."""
+    if not (from_ and to) and not updated_since:
+        raise HTTPException(400, "from and to (or updated_since) are required")
+    start = _parse_iso(from_, "from") if from_ else None
+    end = _parse_iso(to, "to") if to else None
+    since = _parse_iso(updated_since, "updated_since") if updated_since else None
+    if (start is None) != (end is None):
+        raise HTTPException(400, "from and to must be given together")
+    if start and end <= start:
+        raise HTTPException(400, "to must be after from")
+    limit = max(1, min(limit, 500))
+    court_id = None
+    if court:
+        court_id = court if court.startswith("court_") else f"court_{court}"
+    if _firestore_db is None:
+        return {"clips": [], "next_cursor": None}
+
+    # createdAt marks the clip's end; widen the lower bound by the clip length
+    # so a clip that started before `from` but ends inside the window counts.
+    # Single-field range + order on createdAt needs no composite index;
+    # club/court are filtered here, as in api_highlights.
+    collection = _firestore_db.collection(FIRESTORE_COLLECTION)
+    lower = max(t for t in (start, since) if t is not None)
+    query = collection.where(filter=firestore.FieldFilter("createdAt", ">", lower))
+    if end:
+        clip_len = timedelta(seconds=CFG["system"]["clip_seconds"])
+        query = query.where(filter=firestore.FieldFilter("createdAt", "<", end + clip_len))
+    query = query.order_by("createdAt").order_by("__name__")
+    if cursor:
+        last = collection.document(cursor).get()
+        if not last.exists:
+            raise HTTPException(400, "cursor is invalid or expired")
+        query = query.start_after(last)
+
+    out_tz = (start or since).tzinfo or PARTNER_TZ
+    clips = []
+    last_id = None
+    has_more = False
+    for doc in query.stream():
+        d = doc.to_dict()
+        if not d.get("videoUrl") or d.get("source") == "seed":
+            continue
+        if club and d.get("club") != club:
+            continue
+        if court_id and d.get("court") != court_id:
+            continue
+        duration = timedelta(seconds=d.get("durationSeconds") or 0)
+        if end and d["createdAt"] - duration >= end:
+            continue
+        if len(clips) == limit:
+            has_more = True
+            break
+        clips.append(_partner_clip(doc.id, d, out_tz))
+        last_id = doc.id
+    return {"clips": clips, "next_cursor": last_id if has_more else None}
+
+
+@app.get("/v1/clips/{clip_id}")
+def v1_clip(clip_id: str):
+    if _firestore_db is None:
+        raise HTTPException(404, "clip not found")
+    snap = _firestore_db.collection(FIRESTORE_COLLECTION).document(clip_id).get()
+    d = snap.to_dict() if snap.exists else None
+    if not d or not d.get("videoUrl") or d.get("source") == "seed":
+        raise HTTPException(404, "clip not found")
+    return _partner_clip(snap.id, d, PARTNER_TZ)
 
 
 @app.get("/api/status")

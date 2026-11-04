@@ -1,0 +1,19 @@
+$kind: http-request
+name: 2. List clips (court 1, today 15:00-17:00)
+url: "{{base_url}}/v1/clips?club=onnut&court=1&from=2026-11-04T15:00:00%2B07:00&to=2026-11-04T17:00:00%2B07:00"
+method: GET
+queryParams:
+  club: onnut
+  court: "1"
+  from: 2026-11-04T15:00:00%2B07:00
+  to: 2026-11-04T17:00:00%2B07:00
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      const j = pm.response.json();
+      pm.test('has clips array', () => pm.expect(j.clips).to.be.an('array'));
+      if (j.clips.length) pm.collectionVariables.set('clip_id', j.clips[0].id);
+      pm.collectionVariables.set('next_cursor', j.next_cursor || '');
+    language: text/javascript
+order: 2000

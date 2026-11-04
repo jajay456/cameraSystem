@@ -1,0 +1,17 @@
+$kind: http-request
+url: "{{base_url}}/v1/clips?club=onnut&court=1&from=2026-11-04T15:00:00%2B07:00&to=2026-11-04T17:00:00%2B07:00&limit=1"
+method: GET
+queryParams:
+  club: onnut
+  court: "1"
+  from: 2026-11-04T15:00:00%2B07:00
+  to: 2026-11-04T17:00:00%2B07:00
+  limit: "1"
+scripts:
+  - type: afterResponse
+    code: |-
+      const j = pm.response.json();
+      pm.collectionVariables.set('next_cursor', j.next_cursor || '');
+      pm.test('next_cursor set when more clips exist', () => pm.expect(j).to.have.property('next_cursor'));
+    language: text/javascript
+order: 3000

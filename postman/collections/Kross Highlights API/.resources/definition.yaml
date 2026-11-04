@@ -1,0 +1,11 @@
+$kind: collection
+description: Book and Go partner API. Paste the key from C:\KrossReplay\cameraSystem\.env (PARTNER_API_KEYS) into the collection variable api_key.
+variables:
+  base_url: https://api.krosshighlight.com
+  api_key: ""
+  clip_id: ""
+  next_cursor: ""
+auth:
+  type: bearer
+  credentials:
+    token: bag_QxgUBNOTEnBhW-V4b3ZN02QUXXedw9BKBrl1VeviSSb5NSDs

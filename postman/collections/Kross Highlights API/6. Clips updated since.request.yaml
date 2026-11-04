@@ -1,0 +1,6 @@
+$kind: http-request
+url: "{{base_url}}/v1/clips?updated_since=2026-11-04T00:00:00%2B07:00"
+method: GET
+queryParams:
+  updated_since: 2026-11-04T00:00:00%2B07:00
+order: 6000

@@ -1,0 +1,9 @@
+$kind: http-request
+url: "{{base_url}}/v1/clips?club=onnut&court=3&from=2026-11-03T18:00:00%2B07:00&to=2026-11-03T19:30:00%2B07:00"
+method: GET
+queryParams:
+  club: onnut
+  court: "3"
+  from: 2026-11-03T18:00:00%2B07:00
+  to: 2026-11-03T19:30:00%2B07:00
+order: 7000
