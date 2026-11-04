@@ -1,6 +1,12 @@
 .venv/
 __pycache__/
 *.pyc
+functions/node_modules/
+functions/lib/
+functions/.runtimeconfig.json
+functions/.secret.local
+.mediamtx.runtime.yml
+logs/com.kross.*.log
 
 .env
 firebase-service-account.json

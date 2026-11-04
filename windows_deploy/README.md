@@ -23,6 +23,25 @@ python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
 ```
 
+For a repeatable setup, including Java and the other prerequisites, run
+PowerShell as Administrator:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File windows_deploy\setup_windows.ps1
+```
+
+The script uses `winget` to install Python 3.11, Node.js LTS, Java 21,
+FFmpeg, cloudflared, NSSM, and Firebase CLI, then creates `.venv`, installs
+Python and Functions dependencies, and runs the Functions TypeScript build.
+MediaMTX must be downloaded from its GitHub Releases page and added to PATH
+if it is not already installed. It never deploys.
+
+To only validate an already prepared machine:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File windows_deploy\setup_windows.ps1 -SkipPrerequisites
+```
+
 ## 4. Edit config.yaml for this branch
 - `system.encoder` → set to `libx264` (safe default; works without any
   special GPU driver — see the comment in config.yaml for the qsv option if
@@ -50,6 +69,35 @@ any login) and restarts itself automatically if it ever crashes — the
 Windows equivalent of the `launchd` service used on the Mac test machine.
 
 To remove it later: edit and run `uninstall_service.bat` as administrator.
+
+## 6a. Run the complete local stack without terminals
+
+The real camera must run on this Windows machine. The Mac does not need to
+stay online. Install Node.js, Java 21, `cloudflared`, and NSSM on Windows.
+Create the Python environment as above, then put the RTSP URL and test key in
+the ignored `.env`:
+
+```text
+CAMERA_RTSP_URL=rtsp://user:password@camera-ip/stream1
+TEST_API_KEY=replace-with-a-long-random-key
+CLOUDFLARE_TUNNEL_NAME=kross-api
+```
+
+Set up the named tunnel on this Windows machine (`cloudflared tunnel login`,
+`cloudflared tunnel create`, DNS route, and `%USERPROFILE%\.cloudflared\config.yml`)
+with its ingress targeting `http://127.0.0.1:8001`. The tunnel must target the
+API-only gateway, not port 8000, 4000, 5001, or 8080.
+
+Edit paths at the top of `install_local_services.bat`, then run it as
+Administrator. It installs and auto-starts:
+
+- `KrossFirebaseEmulator` (Firestore/Auth/Functions emulators)
+- `KrossReplay` (real camera, clip cutting, R2 upload)
+- `KrossApiGateway` (API key and API-only exposure on port 8001)
+- `KrossCloudflareTunnel` (stable partner URL)
+
+Use `uninstall_local_services.bat` as Administrator to remove them. Check
+logs in `logs\` and services with `sc query KrossReplay`.
 
 ## 7. Optional: tray icon control panel
 `kross_control_win.py` is the Windows equivalent of the Mac menu-bar app —

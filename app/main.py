@@ -46,6 +46,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from firebase_admin import credentials, firestore
+from google.auth.credentials import AnonymousCredentials
+from google.cloud import firestore as google_firestore
 from pydantic import BaseModel
 from ruamel.yaml import YAML
 from tenacity import retry, stop_after_attempt, wait_fixed
@@ -63,6 +65,7 @@ CONFIG_PATH = ROOT / "config.yaml"
 MEDIAMTX_PATH = ROOT / "mediamtx.yml"
 MEDIAMTX_RTSP_PORT = 8554
 MEDIAMTX_API = "http://localhost:9997"
+MEDIAMTX_RUNTIME_PATH = ROOT / ".mediamtx.runtime.yml"
 
 load_dotenv(ROOT / ".env")
 
@@ -121,6 +124,12 @@ _service_account_path = os.environ.get("FIREBASE_SERVICE_ACCOUNT_PATH")
 if _service_account_path and Path(_service_account_path).exists():
     firebase_admin.initialize_app(credentials.Certificate(_service_account_path))
     _firestore_db = firestore.client()
+elif os.environ.get("FIRESTORE_EMULATOR_HOST"):
+    _firestore_db = google_firestore.Client(
+        project=os.environ.get("GCLOUD_PROJECT", "kross-highlight-local"),
+        credentials=AnonymousCredentials(),
+    )
+    log.info("Firestore emulator configured at %s", os.environ["FIRESTORE_EMULATOR_HOST"])
 else:
     log.warning("Firebase not configured (FIREBASE_SERVICE_ACCOUNT_PATH missing) — clip metadata will not be saved")
 
@@ -151,8 +160,18 @@ def start_mediamtx() -> None:
     global _mediamtx_proc
     stop_mediamtx()
     try:
+        mediamtx_config = load_yaml(MEDIAMTX_PATH)
+        camera_url = os.environ.get("CAMERA_RTSP_URL")
+        if camera_url:
+            paths = mediamtx_config.setdefault("paths", {})
+            path = paths.setdefault("court_1", {})
+            path["source"] = camera_url
+            save_yaml(MEDIAMTX_RUNTIME_PATH, mediamtx_config)
+            config_path = MEDIAMTX_RUNTIME_PATH
+        else:
+            config_path = MEDIAMTX_PATH
         _mediamtx_proc = subprocess.Popen(
-            ["mediamtx", str(MEDIAMTX_PATH)],
+            ["mediamtx", str(config_path)],
             cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         log.info("MediaMTX started (pid %d)", _mediamtx_proc.pid)

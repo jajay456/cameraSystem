@@ -1,0 +1,12 @@
+{
+  "name": "kross-replay-local-workflow",
+  "private": true,
+  "scripts": {
+    "dev:emulator": "npm --prefix functions run dev:emulator",
+    "dev:live-read": "npm --prefix functions run dev:live-read",
+    "seed": "npm --prefix functions run seed",
+    "backfill": "npm --prefix functions run backfill",
+    "tunnel:quick": "npm --prefix functions run tunnel:quick",
+    "tunnel:named": "npm --prefix functions run tunnel:named"
+  }
+}
